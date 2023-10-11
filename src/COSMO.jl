@@ -20,12 +20,15 @@ function __init__()
     @require Pardiso="46dd5b70-b6fb-5a00-ae2d-e8fea33afaf2" include("./linear_solver/kktsolver_pardiso.jl")
 
     @require IterativeSolvers="42fd0dbc-a981-5370-80f2-aaf504508153" begin
-        @require LinearMaps="7a12625a-238d-50fd-b39a-03d52299707e" include("./linear_solver/kktsolver_indirect.jl")
+        @require LinearMaps="7a12625a-238d-50fd-b39a-03d52299707e" include("./linear_solver/kktsolver_indirect.jl") 
+        @require CUDA="052768ef-5323-5732-b1bb-66c8b64840ba" include("./linear_solver/kktsolver_indirect_gpu.jl")
     end
+
+   
 end
 
 function version()
-    v"0.8.8"
+    v"0.8.5"
 end
 
 

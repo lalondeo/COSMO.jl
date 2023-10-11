@@ -698,7 +698,7 @@ struct DualPowerCone{T} <: AbstractConvexCone{T}
   primal_cone::PowerCone{T}
 
   function DualPowerCone{T}(alpha::Real, MAX_ITERS::Int = 20, POW_TOL = T(1e-8)) where{T}
-    (alpha <= 0 || alpha >= 1) && throw(DomainError("The exponent α of the dual power cone has to be in (0, 1)."))
+    (alpha <= 0 || alpha >= 1) && throw(DomainError, "The exponent α of the dual power cone has to be in (0, 1).")
     new(3, zeros(T,3), PowerCone{T}(alpha, MAX_ITERS, POW_TOL))
   end
 end
@@ -812,7 +812,7 @@ end
 CompositeConvexSet(args...) = CompositeConvexSet{DefaultFloat}(args...)
 
 function project!(x::SplitVector{T}, C::CompositeConvexSet{T}) where{T}
-    for i = 1:length(C.sets)
+    Threads.@threads for i = 1:length(C.sets)
         project!(x.views[i],C.sets[i])
     end
 	#foreach(xC -> project!(xC[1], xC[2]), zip(x.views, C.sets))

@@ -136,7 +136,6 @@ function optimize!(ws::COSMO.Workspace{T}) where {T <: AbstractFloat}
 	# do one initialisation step to make ADMM iterates agree with standard ADMM
 	COSMO.admm_x!(ws.vars.s, ws.ν, ws.s_tl, ws.ls, ws.sol, ws.vars.w, ws.kkt_solver, ws.p.q, ws.p.b, ws.ρvec, settings.sigma, m, n)
 	COSMO.admm_w!(ws.vars.s, ws.x_tl, ws.s_tl, ws.vars.w, settings.alpha, m, n);
-
 	while iter + ws.safeguarding_iter < settings.max_iter
 		iter += 1
 
@@ -155,6 +154,13 @@ function optimize!(ws::COSMO.Workspace{T}) where {T <: AbstractFloat}
 		admm_w!(ws.vars.s, ws.x_tl, ws.s_tl, ws.vars.w, settings.alpha, m, n);	
 
 		acceleration_post!(ws.accelerator, ws, iter)
+
+	
+		if(settings.callback(ws, iter)) 
+			break 
+		end
+		
+
 		# @show(ws.vars.w)
 		# convergence / infeasibility / timelimit checks
 		cost, status, res_info = check_termination!(ws, settings, iter, cost, status, res_info, time_limit_start, n)
