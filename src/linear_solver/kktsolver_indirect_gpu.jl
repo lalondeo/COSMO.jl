@@ -98,7 +98,7 @@ function solve!(S::IndirectReducedKKTSolverGPU, y::AbstractVector{T}, x::Abstrac
     # Sanity check for tolerance
     # might not always hold for MINRES, as its termination criterion is approximate, (see its documentation)
     # @assert get_tolerance(S) > norm(L*S.previous_solution - y1)
-
+	copyto!(S.y1gpu, S.previous_solution)
     # y2 = Ay1 - x2
     mul!(S.y2gpu, S.A, S.y1gpu)
     axpy!(-one(T), S.x2gpu, S.y2gpu)
