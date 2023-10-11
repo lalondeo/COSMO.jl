@@ -74,7 +74,7 @@ function solve!(S::IndirectReducedKKTSolverGPU, y::AbstractVector{T}, x::Abstrac
     x2 = view(S.x, S.n+1:S.n+S.m); y2 = view(S.y, S.n+1:S.n+S.m)
 
     # Form right-hand side for cg/minres: y1 = x1 + A'ρx2
-    @. y2 = S.ρ*x2
+    CUDA.@allowscalar @. y2 = S.ρ[1] *x2
     mul!(y1, S.A', y2)
     y1 .+= x1
 	copyto!(S.y1cpu, y1)
