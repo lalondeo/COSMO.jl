@@ -20,9 +20,10 @@ mutable struct IndirectReducedKKTSolverGPU{T} <: AbstractKKTSolver
     multiplications::Vector{Int}
     tmp_n::CuVector{T} # n-dimensional used to avoid memory allocation
     tmp_m::CuVector{T} # m-dimensional used to avoid memory allocation
-    x::CuVector{T}
-    y::CuVector{T}
-
+    x::Vector{T}
+    y::Vector{T}
+	y1gpu::CuVector{T}
+	y1cpu::Vector{T}
     function IndirectReducedKKTSolverGPU(P, A, σ::T, ρ;
         solver_type::Symbol=:CG, tol_constant::T=T(1.0), tol_exponent::T=T(3.0)
         ) where {T}
@@ -35,7 +36,7 @@ mutable struct IndirectReducedKKTSolverGPU{T} <: AbstractKKTSolver
         new{T}(m, n, CUSPARSE.CuSparseMatrixCSC(P), CUSPARSE.CuSparseMatrixCSC(A), σ, ρ,
             tol_constant, tol_exponent,
             solver_type,
-            CUDA.zeros(T, n), 1, zeros(Int, 0), CUDA.zeros(T, n), CUDA.zeros(T, m), CUDA.zeros(m+n), CUDA.zeros(m+n))
+            CUDA.zeros(T, n), 1, zeros(Int, 0), CUDA.zeros(T, n), CUDA.zeros(T, m), zeros(T, m+n), zeros(T, m+n), CUDA.zeros(T,n), zeros(T,n))
     end
 end
 
@@ -76,19 +77,22 @@ function solve!(S::IndirectReducedKKTSolverGPU, y::AbstractVector{T}, x::Abstrac
     @. y2 = S.ρ*x2
     mul!(y1, S.A', y2)
     y1 .+= x1
-
+	copyto!(S.y1cpu, y1)
+	copyto!(S.y1gpu, S.y1cpu)
+	
     push!(S.multiplications, 0)
 
     if S.solver_type == :CG
-        cg!(S.previous_solution, S, y1, abstol=get_tolerance(S)/norm(y1))
+        cg!(S.previous_solution, S, S.y1gpu, abstol=get_tolerance(S)/norm(y1))
     elseif S.solver_type == :MINRES
         init_residual = norm(L*S.previous_solution - y1)
-        minres!(S.previous_solution, S, y1, tol=get_tolerance(S)/init_residual)
+        minres!(S.previous_solution, S, S.y1gpu, tol=get_tolerance(S)/init_residual)
     end
     # Sanity check for tolerance
     # might not always hold for MINRES, as its termination criterion is approximate, (see its documentation)
     # @assert get_tolerance(S) > norm(L*S.previous_solution - y1)
-    copyto!(y1, S.previous_solution)
+    copyto!(S.y1cpu, S.previous_solution)
+	copyto!(y1, S.y1cpu)
 
     # y2 = Ay1 - x2
     mul!(y2, S.A, y1)
