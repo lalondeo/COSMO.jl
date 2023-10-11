@@ -20,10 +20,14 @@ mutable struct IndirectReducedKKTSolverGPU{T} <: AbstractKKTSolver
     multiplications::Vector{Int}
     tmp_n::CuVector{T} # n-dimensional used to avoid memory allocation
     tmp_m::CuVector{T} # m-dimensional used to avoid memory allocation
-    x::Vector{T}
-    y::Vector{T}
 	y1gpu::CuVector{T}
 	y1cpu::Vector{T}
+	y2gpu::CuVector{T}
+	y2cpu::Vector{T}
+	x1gpu::CuVector{T}
+	x1cpu::Vector{T}
+	x2gpu::CuVector{T}
+	x2cpu::Vector{T}
     function IndirectReducedKKTSolverGPU(P, A, σ::T, ρ;
         solver_type::Symbol=:CG, tol_constant::T=T(1.0), tol_exponent::T=T(3.0)
         ) where {T}
@@ -36,7 +40,7 @@ mutable struct IndirectReducedKKTSolverGPU{T} <: AbstractKKTSolver
         new{T}(m, n, CUSPARSE.CuSparseMatrixCSC(P), CUSPARSE.CuSparseMatrixCSC(A), σ, ρ,
             tol_constant, tol_exponent,
             solver_type,
-            CUDA.zeros(T, n), 1, zeros(Int, 0), CUDA.zeros(T, n), CUDA.zeros(T, m), zeros(T, m+n), zeros(T, m+n), CUDA.zeros(T,n), zeros(T,n))
+            CUDA.zeros(T, n), 1, zeros(Int, 0), CUDA.zeros(T, n), CUDA.zeros(T, m), CUDA.zeros(T,n), zeros(T,n), CUDA.zeros(T,m), zeros(T,m), CUDA.zeros(T,n), zeros(T,n), CUDA.zeros(T,m), zeros(T,m))
     end
 end
 
@@ -68,19 +72,20 @@ function solve!(S::IndirectReducedKKTSolverGPU, y::AbstractVector{T}, x::Abstrac
     # And then recover y2 as
     # y2 = ρ(Ay1 - x2)
 	
-	CUDA.@allowscalar rho = S.ρ[1]
-    copyto!(S.x, x)
-
-    x1 = view(S.x, 1:S.n); y1 = view(S.y, 1:S.n)
-    x2 = view(S.x, S.n+1:S.n+S.m); y2 = view(S.y, S.n+1:S.n+S.m)
+    copyto!(S.x1cpu, view(x, 1:S.n))
+    copyto!(S.x2cpu, view(x, S.n+1:S.n+S.m))
+	copyto!(S.x1gpu, S.x1cpu)
+    copyto!(S.x2gpu, S.x2cpu)
+	
+   # x1 = view(S.x, 1:S.n); y1 = view(S.y, 1:S.n)
+    #x2 = view(S.x, S.n+1:S.n+S.m); y2 = view(S.y, S.n+1:S.n+S.m)
 
 
     # Form right-hand side for cg/minres: y1 = x1 + A'ρx2
-    @. y2 = rho *x2
-    mul!(y1, S.A', y2)
-    y1 .+= x1
-	copyto!(S.y1cpu, y1)
-	copyto!(S.y1gpu, S.y1cpu)
+	S.y2gpu .= S.x2gpu
+	S.y2gpu .*= S.ρ
+    mul!(S.y1gpu, S.A', S.y2gpu)
+    S.y1gpu .+= S.x1gpu
 	
     push!(S.multiplications, 0)
 
@@ -93,16 +98,18 @@ function solve!(S::IndirectReducedKKTSolverGPU, y::AbstractVector{T}, x::Abstrac
     # Sanity check for tolerance
     # might not always hold for MINRES, as its termination criterion is approximate, (see its documentation)
     # @assert get_tolerance(S) > norm(L*S.previous_solution - y1)
-    copyto!(S.y1cpu, S.previous_solution)
-	copyto!(y1, S.y1cpu)
 
     # y2 = Ay1 - x2
-    mul!(y2, S.A, y1)
-    axpy!(-one(T), x2, y2)
-    @. y2 .*= rho
+    mul!(S.y2gpu, S.A, S.y1gpu)
+    axpy!(-one(T), S.x2gpu, S.y2gpu)
+    S.y2gpu .*= S.ρ
 
     S.iteration_counter += 1
-    copyto!(y, S.y)
+    copyto!(S.y1cpu, S.y1gpu)
+	copyto!(S.y2cpu, S.y2gpu)
+	copyto!(view(y, 1:S.n), S.y1cpu)
+	copyto!(view(y, S.n+1:S.n+S.m), S.y2cpu)
+
     return y
 end
 
