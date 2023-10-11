@@ -90,9 +90,9 @@ function solve!(S::IndirectReducedKKTSolverGPU, y::AbstractVector{T}, x::Abstrac
     push!(S.multiplications, 0)
 
     if S.solver_type == :CG
-        cg!(S.previous_solution, S, S.y1gpu, abstol=get_tolerance(S)/norm(y1))
+        cg!(S.previous_solution, S, S.y1gpu, abstol=get_tolerance(S)/norm(S.y1gpu))
     elseif S.solver_type == :MINRES
-        init_residual = norm(L*S.previous_solution - y1)
+        init_residual = norm(L*S.previous_solution - S.y1gpu)
         minres!(S.previous_solution, S, S.y1gpu, tol=get_tolerance(S)/init_residual)
     end
     # Sanity check for tolerance
