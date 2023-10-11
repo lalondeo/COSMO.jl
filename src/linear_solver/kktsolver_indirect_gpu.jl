@@ -97,7 +97,7 @@ function solve!(S::IndirectReducedKKTSolverGPU, y::AbstractVector{T}, x::Abstrac
     # y2 = Ay1 - x2
     mul!(y2, S.A, y1)
     axpy!(-one(T), x2, y2)
-    @. y2 .*= S.ρ
+    CUDA.@allowscalar @. y2 .*= S.ρ[1]
 
     S.iteration_counter += 1
     copyto!(y, S.y)
